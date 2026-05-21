@@ -9,6 +9,7 @@ Bicep lab demonstrating **[Azure Virtual WAN static routes](https://learn.micros
 - Spoke VNets per hub + an indirect spoke peered behind the Hub2 NVA
 
 See **[PLAN.md](./PLAN.md)** for full architecture, phased delivery plan, and validation steps.
+See **[ARCHITECTURE.md](./ARCHITECTURE.md)** for diagrams (Mermaid).
 
 ## Deploy (planned)
 ```bash
