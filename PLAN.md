@@ -31,7 +31,7 @@ Lab to demonstrate **Azure Virtual WAN static routes** per
 Two-hub vWAN with **asymmetric capabilities** to make static-route behaviour observable:
 
 - **Hub1 (secured)** — Azure Firewall in hub, no routing intent. Demonstrates Use Case 1.
-- **Hub2 (plain)** — no firewall. Demonstrates Use Case 2 (static route to spoke NVA).
+- **Hub2 (plain)** — no firewall in hub. **Azure Firewall deployed in spoke2** acts as the inspection point. Demonstrates Use Case 2 (static route to NVA/firewall in spoke).
 - One spoke VNet per hub, plus an "indirect spoke" peered behind Hub2's NVA to demo Option 1.
 
 ## Target Architecture
@@ -46,8 +46,8 @@ Two-hub vWAN with **asymmetric capabilities** to make static-route behaviour obs
                        │            ▼                           │
    spoke2-vnet ◄──────►│  Hub2 (10.11.0.0/23, no firewall)     │
    10.30.0.0/16        │                                        │
-   nva-vm in spoke2    └────────────────────────────────────────┘
-   10.30.1.4
+   AzFW in spoke2      └────────────────────────────────────────┘
+   10.30.1.4 (AzFW)
                               │
                        peered │ (indirect spoke)
                               ▼
@@ -59,8 +59,8 @@ Two-hub vWAN with **asymmetric capabilities** to make static-route behaviour obs
 
 1. **Hub1 defaultRouteTable**: `10.20.0.0/16` (and `0.0.0.0/0`) → next hop **AzFw resource id**.
    Spoke1 ↔ Spoke2 traffic transits AzFW; AzFW logs prove inspection. Spoke1 ↔ internet via AzFW.
-2. **Hub2 VNet connection (spoke2)**: `10.40.0.0/16` with next hop `10.30.1.4` (NVA), `Propagate static route = true` → Option 1. Indirect spoke is reachable from Hub1 via Hub2→NVA→peered VNet.
-3. **Combined**: from spoke1, `10.40.0.0/16` resolves via AzFW (Hub1) → Hub2 → NVA → indirect spoke. Validates hybrid pattern.
+2. **Hub2 VNet connection (spoke2)**: `10.40.0.0/16` with next hop `10.30.1.4` (spoke2 AzFW private IP), `Propagate static route = true` → Option 1. Indirect spoke is reachable from Hub1 via Hub2 → spoke2 AzFW → peered indirect VNet.
+3. **Combined**: from spoke1, `10.40.0.0/16` resolves via Hub1 AzFW → Hub2 → spoke2 AzFW → indirect spoke. Validates **two-firewall hybrid**: hub-attached AzFW + spoke-deployed AzFW.
 
 ### Validation
 
@@ -117,13 +117,15 @@ Two-hub vWAN with **asymmetric capabilities** to make static-route behaviour obs
 - vWAN base: free
 - 2× vHub units (1 RU each): ~$0.50/hr → ~$24/day for both hubs
 - AzFW Standard (hub-attached): ~$1.25/hr + $0.016/GB → ~$30/day idle
-- 3× B2s VMs + disks + Bastion (optional): ~$5/day
-- **All-up ~$55–60/day**. Deallocate VMs + AzFW when not demoing to drop to ~$25/day (hubs only).
+- 3× B2s Linux VMs + disks (no Bastion, SSH from home IP only): ~$4/day
+- **Spoke AzFW Standard**: ~$30/day idle + data
+- **All-up ~$85–90/day** (2× AzFW + 2× vHubs + VMs). Deallocate both AzFWs + VMs when idle → ~$25/day.
+- Cost-saver swap: replace spoke AzFW with a Linux NVA VM (iptables/FRR) → drops spoke-side cost to ~$2/day.
 
-## Open questions for Nirmal
+## Decisions (locked 2026-05-21)
 
-1. Want **Bastion** for VM access, or stick with JIT public IP on a single jump host? (Bastion Developer SKU ~$free during preview windows but adds complexity.)
-2. Include a **VPN gateway** on Hub2 to also demonstrate branch→spoke-via-static-route, or keep it VNet-only for now?
-3. Should we also include a **routing intent** comparison hub later (Hub3), to contrast against static routes?
+- **No Bastion** — Linux VMs with public IPs, SSH locked to home IP `115.70.58.97` via NSG.
+- **No VPN gateway** — VNet-only topology.
+- **Firewall in the spoke VNet** — spoke2 hosts an **Azure Firewall (Standard)** that serves as the next-hop NVA for the static-route demo. This lets the lab compare a **hub-attached AzFW (Hub1)** against a **spoke-deployed AzFW (Hub2 spoke)** side-by-side.
 
-— answer those and I'll proceed to Phase 1.
+Next: Phase 1 bicep refactor.
